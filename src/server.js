@@ -10,6 +10,13 @@ const schemaParticipantPost = Joi.object({
   name: Joi.string().min(1).trim().required()
 })
 
+const schemaMessagePost = Joi.object({
+  to: Joi.string().min(1).trim().required(),
+  text: Joi.string().min(1).trim().required(),
+  type: Joi.valid('private_message', 'message').required(),
+  user: Joi.string().min(1).trim().required()
+})
+
 
 //Config
 const app = express();
@@ -74,7 +81,6 @@ app.post('/participants', async (req, res) => {
     return;
   }
   const lastStatus = new Date().getTime()
-  const time = 0
   const resultParticipant = await db.collection('participants').insertOne({name,lastStatus});
   const resultMessage = await db.collection('messages').insertOne({from: name, to: 'Todos', text: 'entra na sala...', type: "status", time: hourNow()})
   res.status(201).send(resultParticipant)
@@ -84,8 +90,26 @@ app.post('/participants', async (req, res) => {
 app.post('/messages', async (req,res) => {
   const {to, text, type} = req.body;
   const {user} = req.headers
-  const result = await db.collection('messages').insertOne({})
-  res.send("post a new message")
+  const resultValidate = schemaMessagePost.validate({to, text, type, user})
+  if(resultValidate.error){
+    res.status(422).send(resultValidate.error.details);
+    return;
+  }
+  const allParticipants = await db.collection('participants').find({}).toArray()
+  if(!allParticipants.find(participant => participant.name === user)){
+    res.status(400).send("Usuário não encontrado!");
+    return;
+  }
+
+  const objectMessage = {
+    to,
+    text,
+    type,
+    from: user
+  }
+
+  const result = await db.collection('messages').insertOne(objectMessage)
+  res.send(result)
 });
 
 
